@@ -1,18 +1,22 @@
-name: Build Kusum Bakery Junction APK
+name: Android CI - Build Kusum Bakery Junction APK
 
 on:
   push:
     branches:
       - main
       - master
+  pull_request:
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 jobs:
-  build-apk:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Source Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -24,30 +28,45 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Prepare Demo google-services.json if missing
+      - name: Locate Project Root and Prepare google-services.json
         run: |
-          if [ ! -f app/google-services.json ]; then
-            python3 -c '
-          import json
-          cfg = {
+          if [ -d "KusumBakeryJunction/app" ] && [ ! -d "app" ]; then
+            cp -r KusumBakeryJunction/* .
+            cp -r KusumBakeryJunction/.* . 2>/dev/null || true
+          fi
+          mkdir -p app
+          if [ ! -f "app/google-services.json" ]; then
+            cat << 'EOF' > app/google-services.json
+          {
             "project_info": {
               "project_number": "123456789012",
               "project_id": "kusum-bakery-junction-prod",
               "storage_bucket": "kusum-bakery-junction-prod.appspot.com"
             },
-            "client": [{
-              "client_info": {
-                "mobilesdk_app_id": "1:123456789012:android:abcdef1234567890",
-                "android_client_info": {"package_name": "in.kusumbakeryjunction.app"}
-              },
-              "oauth_client": [],
-              "api_key": [{"current_key": "AIzaSyDemoKeyForCloudBuildTestingOnly12345"}],
-              "services": {"appinvite_service": {"other_platform_oauth_client": []}}
-            }],
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:123456789012:android:abcdef1234567890",
+                  "android_client_info": {
+                    "package_name": "in.kusumbakeryjunction.app"
+                  }
+                },
+                "oauth_client": [],
+                "api_key": [
+                  {
+                    "current_key": "AIzaSyDemoKeyForCloudBuildTestingOnly12345"
+                  }
+                ],
+                "services": {
+                  "appinvite_service": {
+                    "other_platform_oauth_client": []
+                  }
+                }
+              }
+            ],
             "configuration_version": "1"
           }
-          open("app/google-services.json", "w").write(json.dumps(cfg, indent=2))
-          '
+          EOF
           fi
 
       - name: Setup Gradle
@@ -55,13 +74,13 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Run Automated Unit Tests
+      - name: Run Unit Tests
         run: gradle testDebugUnitTest
 
       - name: Build Debug APK
         run: gradle assembleDebug
 
-      - name: Upload Installable Debug APK
+      - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: KusumBakeryJunction-Debug-APK
